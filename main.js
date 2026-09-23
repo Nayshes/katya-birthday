@@ -452,6 +452,9 @@
     click.start(t0);
     click.stop(t0 + 0.018);
 
+    // Low triangle kick separates on iPhone during fast spin; keep it only when slow.
+    if (slow < 0.45) return;
+
     const body = audioCtx.createOscillator();
     const bodyGain = audioCtx.createGain();
     body.type = "triangle";
@@ -466,10 +469,19 @@
     body.stop(t0 + 0.07);
   }
 
-  function scheduleTicks(count, weight) {
+  function scheduleTicks(count, weight, frameSec) {
     const n = Math.min(count, 5);
-    const gap = n >= 4 ? 0.014 : n >= 2 ? 0.026 : 0;
     const now = audioCtx ? audioCtx.currentTime : 0;
+    if (n <= 1) {
+      playTick(weight, now);
+      return;
+    }
+    const span = Math.max(0.001, Math.min(frameSec || 0.016, 0.05));
+    const gap = span / n;
+    if (gap < 0.012) {
+      playTick(weight, now);
+      return;
+    }
     for (let i = 0; i < n; i += 1) playTick(weight, now + i * gap);
   }
 
@@ -538,7 +550,7 @@
       const crossed = boundary - prevBoundary;
       if (crossed > 0) {
         const weight = Math.min(1, Math.max(0.2, 1 - degPerSec / 340));
-        scheduleTicks(crossed, weight);
+        scheduleTicks(crossed, weight, dt);
         pegV = degPerSec > 400 ? -7 : degPerSec > 120 ? -12 : -16;
       }
       prevBoundary = boundary;
