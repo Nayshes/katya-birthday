@@ -68,6 +68,7 @@
   let master = null;
   let tickBuffer = null;
   let dingPlayed = false;
+  const phoneAudio = /iPhone|iPad|iPod/i.test(navigator.userAgent);
   let modalOpen = false;
   let viewW = window.innerWidth;
   let viewH = window.innerHeight;
@@ -423,18 +424,21 @@
     const t0 = when ?? audioCtx.currentTime;
     const slow = Math.min(1, Math.max(0, weight));
 
-    const src = audioCtx.createBufferSource();
-    src.buffer = tickBuffer;
-    const hp = audioCtx.createBiquadFilter();
-    hp.type = "highpass";
-    hp.frequency.value = 850;
-    const ng = audioCtx.createGain();
-    ng.gain.setValueAtTime((0.42 + slow * 0.28) / 18, t0);
-    src.connect(hp);
-    hp.connect(ng);
-    ng.connect(master);
-    src.playbackRate.value = 1.12 - slow * 0.28;
-    src.start(t0);
+    const fastPhone = phoneAudio && slow < 0.45;
+    if (!fastPhone) {
+      const src = audioCtx.createBufferSource();
+      src.buffer = tickBuffer;
+      const hp = audioCtx.createBiquadFilter();
+      hp.type = "highpass";
+      hp.frequency.value = 850;
+      const ng = audioCtx.createGain();
+      ng.gain.setValueAtTime((0.42 + slow * 0.28) / 18, t0);
+      src.connect(hp);
+      hp.connect(ng);
+      ng.connect(master);
+      src.playbackRate.value = 1.12 - slow * 0.28;
+      src.start(t0);
+    }
 
     const click = audioCtx.createOscillator();
     const clickFilter = audioCtx.createBiquadFilter();
@@ -452,8 +456,7 @@
     click.start(t0);
     click.stop(t0 + 0.018);
 
-    // Low triangle kick separates on iPhone during fast spin; keep it only when slow.
-    if (slow < 0.45) return;
+    if (fastPhone) return;
 
     const body = audioCtx.createOscillator();
     const bodyGain = audioCtx.createGain();
@@ -469,19 +472,14 @@
     body.stop(t0 + 0.07);
   }
 
-  function scheduleTicks(count, weight, frameSec) {
-    const n = Math.min(count, 5);
+  function scheduleTicks(count, weight) {
     const now = audioCtx ? audioCtx.currentTime : 0;
-    if (n <= 1) {
+    if (phoneAudio) {
       playTick(weight, now);
       return;
     }
-    const span = Math.max(0.001, Math.min(frameSec || 0.016, 0.05));
-    const gap = span / n;
-    if (gap < 0.012) {
-      playTick(weight, now);
-      return;
-    }
+    const n = Math.min(count, 5);
+    const gap = n >= 4 ? 0.014 : n >= 2 ? 0.026 : 0;
     for (let i = 0; i < n; i += 1) playTick(weight, now + i * gap);
   }
 
@@ -550,7 +548,7 @@
       const crossed = boundary - prevBoundary;
       if (crossed > 0) {
         const weight = Math.min(1, Math.max(0.2, 1 - degPerSec / 340));
-        scheduleTicks(crossed, weight, dt);
+        scheduleTicks(crossed, weight);
         pegV = degPerSec > 400 ? -7 : degPerSec > 120 ? -12 : -16;
       }
       prevBoundary = boundary;
