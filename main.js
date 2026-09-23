@@ -66,9 +66,7 @@
   let pegV = 0;
   let audioCtx = null;
   let master = null;
-  let tickBuffer = null;
   let dingPlayed = false;
-  const phoneAudio = /iPhone|iPad|iPod/i.test(navigator.userAgent);
   let modalOpen = false;
   let viewW = window.innerWidth;
   let viewH = window.innerHeight;
@@ -383,7 +381,6 @@
         comp.release.value = 0.12;
         master.connect(comp);
         comp.connect(audioCtx.destination);
-        tickBuffer = makeTickBuffer(audioCtx);
       }
       if (audioCtx.state !== "running") audioCtx.resume();
     } catch (err) {
@@ -405,82 +402,31 @@
     } catch (err) {}
   }
 
-  function makeTickBuffer(ctx) {
-    const length = Math.floor(ctx.sampleRate * 0.042);
-    const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < length; i += 1) {
-      const t = i / ctx.sampleRate;
-      const env = Math.exp(-t / 0.0075);
-      const n = Math.sin(i * 12.9898) * 43758.5453;
-      const noise = (n - Math.floor(n)) * 2 - 1;
-      data[i] = noise * env;
-    }
-    return buffer;
-  }
-
-  function playTick(weight, when) {
-    if (!audioCtx || !tickBuffer || !master) return;
+  function playTick(when) {
+    if (!audioCtx || !master) return;
     const t0 = when ?? audioCtx.currentTime;
-    const slow = Math.min(1, Math.max(0, weight));
-
-    const fastPhone = phoneAudio && slow < 0.45;
-    if (!fastPhone) {
-      const src = audioCtx.createBufferSource();
-      src.buffer = tickBuffer;
-      const hp = audioCtx.createBiquadFilter();
-      hp.type = "highpass";
-      hp.frequency.value = 850;
-      const ng = audioCtx.createGain();
-      ng.gain.setValueAtTime((0.42 + slow * 0.28) / 18, t0);
-      src.connect(hp);
-      hp.connect(ng);
-      ng.connect(master);
-      src.playbackRate.value = 1.12 - slow * 0.28;
-      src.start(t0);
-    }
-
     const click = audioCtx.createOscillator();
     const clickFilter = audioCtx.createBiquadFilter();
     const clickGain = audioCtx.createGain();
     click.type = "square";
-    click.frequency.setValueAtTime(1700 - slow * 420, t0);
+    click.frequency.setValueAtTime(1616, t0);
     clickFilter.type = "highpass";
     clickFilter.frequency.value = 1400;
     clickGain.gain.setValueAtTime(0.0001, t0);
-    clickGain.gain.exponentialRampToValueAtTime((0.055 + slow * 0.05) / 18, t0 + 0.0012);
+    clickGain.gain.exponentialRampToValueAtTime(0.065 / 18, t0 + 0.0012);
     clickGain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.011);
     click.connect(clickFilter);
     clickFilter.connect(clickGain);
     clickGain.connect(master);
     click.start(t0);
     click.stop(t0 + 0.018);
-
-    if (fastPhone) return;
-
-    const body = audioCtx.createOscillator();
-    const bodyGain = audioCtx.createGain();
-    body.type = "triangle";
-    body.frequency.setValueAtTime(190 + (1 - slow) * 120, t0);
-    body.frequency.exponentialRampToValueAtTime(65, t0 + 0.04);
-    bodyGain.gain.setValueAtTime(0.0001, t0);
-    bodyGain.gain.exponentialRampToValueAtTime((0.16 + slow * 0.14) / 18, t0 + 0.0025);
-    bodyGain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.038 + slow * 0.02);
-    body.connect(bodyGain);
-    bodyGain.connect(master);
-    body.start(t0);
-    body.stop(t0 + 0.07);
   }
 
-  function scheduleTicks(count, weight) {
-    const now = audioCtx ? audioCtx.currentTime : 0;
-    if (phoneAudio) {
-      playTick(weight, now);
-      return;
-    }
+  function scheduleTicks(count) {
     const n = Math.min(count, 5);
-    const gap = n >= 4 ? 0.014 : n >= 2 ? 0.026 : 0;
-    for (let i = 0; i < n; i += 1) playTick(weight, now + i * gap);
+    const now = audioCtx ? audioCtx.currentTime : 0;
+    const gap = n >= 4 ? 0.02 : n >= 2 ? 0.028 : 0;
+    for (let i = 0; i < n; i += 1) playTick(now + i * gap);
   }
 
   function playDing() {
@@ -547,8 +493,7 @@
       const boundary = boundaryIndex(rotation);
       const crossed = boundary - prevBoundary;
       if (crossed > 0) {
-        const weight = Math.min(1, Math.max(0.2, 1 - degPerSec / 340));
-        scheduleTicks(crossed, weight);
+        scheduleTicks(crossed);
         pegV = degPerSec > 400 ? -7 : degPerSec > 120 ? -12 : -16;
       }
       prevBoundary = boundary;
