@@ -356,10 +356,20 @@
     staticSvg.appendChild(pointerGroup);
   }
 
-  function unlockAudio() {
+  let htmlUnlock = null;
+  let htmlUnlocked = false;
+
+  function enablePlaybackSession() {
     try {
-      const AC = window.AudioContext || window.webkitAudioContext;
-      if (!AC) return;
+      if (navigator.audioSession) navigator.audioSession.type = "playback";
+    } catch (err) {}
+  }
+
+  function unlockAudio() {
+    enablePlaybackSession();
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    try {
       if (!audioCtx) {
         audioCtx = new AC();
         master = audioCtx.createGain();
@@ -374,15 +384,24 @@
         comp.connect(audioCtx.destination);
         tickBuffer = makeTickBuffer(audioCtx);
       }
-      if (audioCtx.state === "suspended") audioCtx.resume();
-      const silent = audioCtx.createBuffer(1, 1, audioCtx.sampleRate);
-      const src = audioCtx.createBufferSource();
-      src.buffer = silent;
-      src.connect(audioCtx.destination);
-      src.start(0);
+      if (audioCtx.state !== "running") audioCtx.resume();
     } catch (err) {
-      audioCtx = null;
+      return;
     }
+    if (htmlUnlocked) return;
+    try {
+      if (!htmlUnlock) {
+        htmlUnlock = new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=");
+        htmlUnlock.setAttribute("playsinline", "");
+        htmlUnlock.preload = "auto";
+      }
+      const played = htmlUnlock.play();
+      if (played && played.then) {
+        played.then(() => { htmlUnlocked = true; }).catch(() => {});
+      } else {
+        htmlUnlocked = true;
+      }
+    } catch (err) {}
   }
 
   function makeTickBuffer(ctx) {
@@ -875,6 +894,10 @@
       sky.appendChild(bit);
     }
   }
+
+  document.addEventListener("pointerdown", unlockAudio, { capture: true });
+  document.addEventListener("touchstart", unlockAudio, { capture: true, passive: true });
+  document.addEventListener("touchend", unlockAudio, { capture: true, passive: true });
 
   tryBtn.addEventListener("click", showWheel);
 
