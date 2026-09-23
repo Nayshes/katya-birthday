@@ -1,6 +1,5 @@
 (() => {
-  // TEST unlock. Вернуть: Date.parse("2026-09-25T00:00:00+03:00")
-  const UNLOCK_AT = Date.parse("2026-09-24T01:08:00+03:00");
+  const UNLOCK_AT = Date.parse("2026-09-25T00:00:00+03:00");
 
   const SVG_NS = "http://www.w3.org/2000/svg";
   const CX = 500;
